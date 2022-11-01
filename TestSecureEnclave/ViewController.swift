@@ -69,6 +69,37 @@ class ViewController: UIViewController {
         guard let privateKey = privateKey,
               let publicKey = SecKeyCopyPublicKey(privateKey) else { return }
         print("PublicKey: \(publicKey)")
+        let jwk = jwkRepresentation(publicKey)
+        let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
+        print("JWT: \(jwkJsonString)")
+    }
+    
+    private func jwkRepresentation(_ publicKey: SecKey) -> [String:String]? {
+        // For an elliptic curve public key, the format follows the ANSI X9.63 standard using a byte string of 04 || X || Y
+        // https://developer.apple.com/documentation/security/1643698-seckeycopyexternalrepresentation
+        if let publicKeyExtneralRepresentation = SecKeyCopyExternalRepresentation(publicKey, nil) as? Data {
+            var publicKeyBytes: [UInt8] = []
+            publicKeyBytes = Array(publicKeyExtneralRepresentation)
+            // base64url encoding of the octet string representation of the coordinate
+            let yOctets = publicKeyBytes[1...32]
+            let xOctets = publicKeyBytes[33...64]
+            let yHexString = publicKeyBytes[1...32].map({ String(format: "%02X", $0)}).joined(separator: "")
+            let xHexString = publicKeyBytes[33...64].map({ String(format: "%02X", $0)}).joined(separator: "")
+            let y = String(decoding: Data(yOctets).base64EncodedData(), as: UTF8.self).base64URLEscaped()
+            let x = String(decoding: Data(xOctets).base64EncodedData(), as: UTF8.self).base64URLEscaped()
+            print("x \(x) of octetString \(xHexString)")
+            print("y \(y) of octetString \(yHexString)")
+            // https://www.rfc-editor.org/rfc/rfc7517
+            // https://www.rfc-editor.org/rfc/rfc7518.html#page-6
+            let jwk: [String:String]  = [
+                "kty":"EC",
+                "crv":"P-256",
+                "x":"\(x)",
+                "y":"\(y)"
+            ]
+            return jwk
+        }
+        return [:]
     }
     
     override func viewDidLoad() {
@@ -78,6 +109,34 @@ class ViewController: UIViewController {
         testSecureEnclave()
     }
     
-    
+    @IBAction func goAction(_ sender: Any) {
+        testSecureEnclave()
+    }
 }
 
+// https://github.com/vapor/core/blob/main/Sources/Core/Data+Base64URL.swift
+extension String {
+    /// Converts a base64-url encoded string to a base64 encoded string.
+    ///
+    /// https://tools.ietf.org/html/rfc4648#page-7
+    public func base64URLUnescaped() -> String {
+        let replaced = replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        /// https://stackoverflow.com/questions/43499651/decode-base64url-to-base64-swift
+        let padding = replaced.count % 4
+        if padding > 0 {
+            return replaced + String(repeating: "=", count: 4 - padding)
+        } else {
+            return replaced
+        }
+    }
+    
+    /// Converts a base64 encoded string to a base64-url encoded string.
+    ///
+    /// https://tools.ietf.org/html/rfc4648#page-7
+    public func base64URLEscaped() -> String {
+        return replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
