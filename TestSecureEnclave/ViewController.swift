@@ -72,6 +72,58 @@ class ViewController: UIViewController {
         let jwk = jwkRepresentation(publicKey)
         let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
         print("JWT: \(jwkJsonString)")
+        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureMessageX962SHA256
+        guard SecKeyIsAlgorithmSupported(privateKey, .sign, signAlgorithm) else {
+            print("Error: unsupported sign algorithm: \(signAlgorithm)")
+            return
+        }
+        print("OK: supported sign algorithm: \(signAlgorithm)")
+        let sampleMessage = "Lorem ipsum bubulo bibi!"
+        let sampleData = Data(sampleMessage.utf8)
+        guard let signature = signSampleData(sampleData, privateKey, signAlgorithm) else { return }
+        let signatureBase64 = signature.base64EncodedString()
+        print("Sample signature: \(signatureBase64)")
+        if verifySampleData(sampleData, signature, publicKey, signAlgorithm) {
+            print("OK: sample data verified!")
+        }
+    }
+   
+    private func verifySampleData(
+        _ message: Data,
+        _ digest: Data,
+        _ publicKey: SecKey,
+        _ signAlgorithm: SecKeyAlgorithm
+    ) -> Bool {
+        var error: Unmanaged<CFError>?
+        guard SecKeyVerifySignature(
+            publicKey,
+            signAlgorithm,
+            message as CFData,
+            digest as CFData,
+            &error
+        ) else {
+            print("Verification error: \(error!.takeRetainedValue())")
+            return false
+        }
+        return true
+    }
+    
+    private func signSampleData(
+        _ message: Data,
+        _ privateKey: SecKey,
+        _ signAlgorithm: SecKeyAlgorithm
+    ) -> Data? {
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(
+            privateKey,
+            signAlgorithm,
+            message as CFData,
+            &error
+        ) as Data? else {
+            print("\(String(describing: error?.takeRetainedValue()))")
+            return nil
+        }
+        return signature
     }
     
     private func jwkRepresentation(_ publicKey: SecKey) -> [String:String]? {
