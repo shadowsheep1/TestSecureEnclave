@@ -72,7 +72,7 @@ class ViewController: UIViewController {
         let jwk = jwkRepresentation(publicKey)
         let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
         print("JWT: \(jwkJsonString)")
-        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureMessageX962SHA256
+        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureDigestX962SHA256
         guard SecKeyIsAlgorithmSupported(privateKey, .sign, signAlgorithm) else {
             print("Error: unsupported sign algorithm: \(signAlgorithm)")
             return
@@ -80,10 +80,15 @@ class ViewController: UIViewController {
         print("OK: supported sign algorithm: \(signAlgorithm)")
         let sampleMessage = "Lorem ipsum bubulo bibi!"
         let sampleData = Data(sampleMessage.utf8)
-        guard let signature = signSampleData(sampleData, privateKey, signAlgorithm) else { return }
+        let sampleDataSha256 = SHA256.hash(data: sampleData).data
+        print("Sample data base64: \(sampleDataSha256.base64EncodedString())")
+        print("Sample data (bin): \(sampleDataSha256.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
+        guard let signature = signSampleData(sampleDataSha256, privateKey, signAlgorithm) else { return }
+        // https://easy64.org/decode-base64-to-file/
+        print("Sample signature (bin): \(signature.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
         let signatureBase64 = signature.base64EncodedString()
         print("Sample signature: \(signatureBase64)")
-        if verifySampleData(sampleData, signature, publicKey, signAlgorithm) {
+        if verifySampleData(sampleDataSha256, signature, publicKey, signAlgorithm) {
             print("OK: sample data verified!")
         }
     }
@@ -126,13 +131,33 @@ class ViewController: UIViewController {
         return signature
     }
     
+    // https://stackoverflow.com/questions/69258967/convert-ecpublickeyseckey-to-pem-string-in-swift
+    private func printAns1Pem(_ publicKeyData: Data) {
+        let ecHeader: [UInt8] = [
+            /* sequence          */ 0x30, 0x59,
+            /* |-> sequence      */ 0x30, 0x13,
+            /* |---> ecPublicKey */ 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, // (ANSI X9.62 public key type)
+            /* |---> prime256v1  */ 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, // (ANSI X9.62 named elliptic curve)
+            /* |-> bit headers   */ 0x07, 0x03, 0x42, 0x00
+        ]
+
+        var asn1 = Data()
+        asn1.append(Data(ecHeader))
+        asn1.append(publicKeyData as Data)
+        let encoded = asn1.base64EncodedString(options: .lineLength64Characters)
+        let pemString = "-----BEGIN PUBLIC KEY-----\r\n\(encoded)\r\n-----END PUBLIC KEY-----\r\n"
+        print(pemString)
+    }
+    
     private func jwkRepresentation(_ publicKey: SecKey) -> [String:String]? {
         // For an elliptic curve public key, the format follows the ANSI X9.63 standard using a byte string of 04 || X || Y
         // https://developer.apple.com/documentation/security/1643698-seckeycopyexternalrepresentation
         if let publicKeyExtneralRepresentation = SecKeyCopyExternalRepresentation(publicKey, nil) as? Data {
+            printAns1Pem(publicKeyExtneralRepresentation)
             var publicKeyBytes: [UInt8] = []
             publicKeyBytes = Array(publicKeyExtneralRepresentation)
             print(publicKeyBytes.map({String(format: "%02X", $0)}).joined(separator: ""))
+            //publicKeyBytes.forEach({print("\($0)")})
             // base64url encoding of the octet string representation of the coordinate
             let xOctets = publicKeyBytes[1...32]
             let yOctets = publicKeyBytes[33...64]
@@ -193,3 +218,13 @@ extension String {
             .replacingOccurrences(of: "=", with: "")
     }
 }
+
+extension Digest {
+    var bytes: [UInt8] { Array(makeIterator()) }
+    var data: Data { Data(bytes) }
+
+    var hexStr: String {
+        bytes.map { String(format: "%02X", $0) }.joined()
+    }
+}
+
