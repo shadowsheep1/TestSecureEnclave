@@ -72,7 +72,7 @@ class ViewController: UIViewController {
         let jwk = jwkRepresentation(publicKey)
         let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
         print("JWT: \(jwkJsonString)")
-        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureDigestX962SHA256
+        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureMessageX962SHA256
         guard SecKeyIsAlgorithmSupported(privateKey, .sign, signAlgorithm) else {
             print("Error: unsupported sign algorithm: \(signAlgorithm)")
             return
@@ -80,15 +80,14 @@ class ViewController: UIViewController {
         print("OK: supported sign algorithm: \(signAlgorithm)")
         let sampleMessage = "Lorem ipsum bubulo bibi!"
         let sampleData = Data(sampleMessage.utf8)
-        let sampleDataSha256 = SHA256.hash(data: sampleData).data
-        print("Sample data base64: \(sampleDataSha256.base64EncodedString())")
-        print("Sample data (bin): \(sampleDataSha256.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
-        guard let signature = signSampleData(sampleDataSha256, privateKey, signAlgorithm) else { return }
+        print("Sample data base64 \(sampleData.base64EncodedString())")
+        print("Sample data (bin): \(sampleData.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
+        guard let signature = signSampleData(sampleData, privateKey, signAlgorithm) else { return }
         // https://easy64.org/decode-base64-to-file/
         print("Sample signature (bin): \(signature.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
         let signatureBase64 = signature.base64EncodedString()
         print("Sample signature: \(signatureBase64)")
-        if verifySampleData(sampleDataSha256, signature, publicKey, signAlgorithm) {
+        if verifySampleData(sampleData, signature, publicKey, signAlgorithm) {
             print("OK: sample data verified!")
         }
     }
@@ -218,13 +217,3 @@ extension String {
             .replacingOccurrences(of: "=", with: "")
     }
 }
-
-extension Digest {
-    var bytes: [UInt8] { Array(makeIterator()) }
-    var data: Data { Data(bytes) }
-
-    var hexStr: String {
-        bytes.map { String(format: "%02X", $0) }.joined()
-    }
-}
-
