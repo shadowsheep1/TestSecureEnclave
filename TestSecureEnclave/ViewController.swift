@@ -132,11 +132,12 @@ class ViewController: UIViewController {
         if let publicKeyExtneralRepresentation = SecKeyCopyExternalRepresentation(publicKey, nil) as? Data {
             var publicKeyBytes: [UInt8] = []
             publicKeyBytes = Array(publicKeyExtneralRepresentation)
+            print(publicKeyBytes.map({String(format: "%02X", $0)}).joined(separator: ""))
             // base64url encoding of the octet string representation of the coordinate
-            let yOctets = publicKeyBytes[1...32]
-            let xOctets = publicKeyBytes[33...64]
-            let yHexString = publicKeyBytes[1...32].map({ String(format: "%02X", $0)}).joined(separator: "")
-            let xHexString = publicKeyBytes[33...64].map({ String(format: "%02X", $0)}).joined(separator: "")
+            let xOctets = publicKeyBytes[1...32]
+            let yOctets = publicKeyBytes[33...64]
+            let xHexString = publicKeyBytes[1...32].map({ String(format: "%02X", $0)}).joined(separator: "")
+            let yHexString = publicKeyBytes[33...64].map({ String(format: "%02X", $0)}).joined(separator: "")
             let y = String(decoding: Data(yOctets).base64EncodedData(), as: UTF8.self).base64URLEscaped()
             let x = String(decoding: Data(xOctets).base64EncodedData(), as: UTF8.self).base64URLEscaped()
             print("x \(x) of octetString \(xHexString)")
