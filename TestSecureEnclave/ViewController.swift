@@ -11,8 +11,10 @@ import CryptoKit
 class ViewController: UIViewController {
     private let tag = "com.example.keys.mykey".data(using: .utf8)!
     private let keyType = kSecAttrKeyTypeECSECPrimeRandom
+    //private let keyType = kSecAttrKeyTypeRSA
     private let keySizeInBits = 256
-    
+    //private let keySizeInBits = 512
+
     // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/storing_keys_in_the_keychain
     private func checkPrivateKeyExistance() throws -> SecKey? {
         let getQuery: [String: Any] = [
@@ -24,6 +26,7 @@ class ViewController: UIViewController {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(getQuery as CFDictionary, &item)
         guard status == errSecSuccess else {
+            print("Key error: \(status)")
             throw NSError(domain: "Error retrieving private key alias \(tag)", code: 42, userInfo: nil)
         }
         let key = item as! SecKey
@@ -37,6 +40,8 @@ class ViewController: UIViewController {
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             .privateKeyUsage, // signing and verification
             &error) else {
+            // https://learning.oreilly.com/library/view/ios-components-and/9780133086898/ch18lev2sec7.html#ch18lev2sec7
+            print("Key generation error! \(error))")
             throw error!.takeRetainedValue() as Error
         }
         
@@ -52,6 +57,7 @@ class ViewController: UIViewController {
         ]
         
         guard let key = SecKeyCreateRandomKey(attributes, &error) else {
+            print("Key generation error: \(error)")
             throw error!.takeRetainedValue() as Error
         }
         return key
@@ -67,7 +73,12 @@ class ViewController: UIViewController {
         }
         
         guard let privateKey = privateKey,
-              let publicKey = SecKeyCopyPublicKey(privateKey) else { return }
+              let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            return
+        }
+        if let privateKeyExtneralRepresentation = SecKeyCopyExternalRepresentation(privateKey, nil) {
+            print("private key: \(privateKeyExtneralRepresentation)")
+        }
         print("PublicKey: \(publicKey)")
         let jwk = jwkRepresentation(publicKey)
         let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
@@ -107,7 +118,7 @@ class ViewController: UIViewController {
             digest as CFData,
             &error
         ) else {
-            print("Verification error: \(error!.takeRetainedValue())")
+            print("Verification error: \(error))")
             return false
         }
         return true
