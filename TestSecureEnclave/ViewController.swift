@@ -80,6 +80,7 @@ class ViewController: UIViewController {
         print("OK: supported sign algorithm: \(signAlgorithm)")
         let sampleMessage = "Lorem ipsum bubulo bibi!"
         let sampleData = Data(sampleMessage.utf8)
+        print("Sample data sha256 base64: \(SHA256.hash(data: sampleData).data.base64EncodedString())")
         print("Sample data base64 \(sampleData.base64EncodedString())")
         print("Sample data (bin): \(sampleData.map({String(format: "0x%02X ", $0)}).joined(separator: ""))")
         guard let signature = signSampleData(sampleData, privateKey, signAlgorithm) else { return }
@@ -215,5 +216,14 @@ extension String {
         return replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+extension Digest {
+    var bytes: [UInt8] { Array(makeIterator()) }
+    var data: Data { Data(bytes) }
+
+    var hexStr: String {
+        bytes.map { String(format: "%02X", $0) }.joined()
     }
 }
