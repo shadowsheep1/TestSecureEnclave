@@ -9,25 +9,63 @@ import UIKit
 import CryptoKit
 
 class ViewController: UIViewController {
-    private let tag = "com.example.keys.mykey".data(using: .utf8)!
-    private let keyType = kSecAttrKeyTypeECSECPrimeRandom
-    //private let keyType = kSecAttrKeyTypeRSA
-    private let keySizeInBits = 256
-    //private let keySizeInBits = 512
+    @IBOutlet weak var keySelector: UISegmentedControl!
+    
+    private var keyConfig: KeyConfig = .ec
+    private enum KeyConfig: Int, CaseIterable {
+        case ec, rsa
+        
+        func keyTag() -> Data {
+            switch self {
+            case .ec:
+                return "com.example.keys.mykey.ec".data(using: .utf8)!
+            case .rsa:
+                return "com.example.keys.mykey.rsa".data(using: .utf8)!
+            }
+        }
+        
+        func keyType() -> CFString {
+            switch self {
+            case .ec:
+                return kSecAttrKeyTypeECSECPrimeRandom
+            case .rsa:
+                return kSecAttrKeyTypeRSA
+            }
+        }
+        
+        func keySizeInBits() -> Int {
+            switch self {
+            case .ec:
+                return 256
+            case .rsa:
+                return 2048
+            }
+        }
+        
+        func keySignAlgorithm() -> SecKeyAlgorithm {
+            switch self {
+            case .ec:
+                return .ecdsaSignatureMessageX962SHA256
+            case .rsa:
+                // https://www.encryptionconsulting.com/overview-of-rsassa-pss/
+                return .rsaSignatureMessagePSSSHA256
+            }
+        }
+    }
 
     // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/storing_keys_in_the_keychain
     private func checkPrivateKeyExistance() throws -> SecKey? {
         let getQuery: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: tag,
-            kSecAttrKeyType as String: keyType,
+            kSecAttrApplicationTag as String: keyConfig.keyTag(),
+            kSecAttrKeyType as String: keyConfig.keyType(),
             kSecReturnRef as String: true
         ]
         var item: CFTypeRef?
         let status = SecItemCopyMatching(getQuery as CFDictionary, &item)
         guard status == errSecSuccess else {
             print("Key error: \(status)")
-            throw NSError(domain: "Error retrieving private key alias \(tag)", code: 42, userInfo: nil)
+            throw NSError(domain: "Error retrieving private key alias \(keyConfig.keyTag())", code: 42, userInfo: nil)
         }
         let key = item as! SecKey
         return key
@@ -41,23 +79,30 @@ class ViewController: UIViewController {
             .privateKeyUsage, // signing and verification
             &error) else {
             // https://learning.oreilly.com/library/view/ios-components-and/9780133086898/ch18lev2sec7.html#ch18lev2sec7
-            print("Key generation error! \(error))")
+            print("Key generation error! \(String(describing: error)))")
             throw error!.takeRetainedValue() as Error
         }
         
-        let attributes: NSDictionary = [
-            kSecAttrKeyType: keyType,
-            kSecAttrKeySizeInBits: keySizeInBits,
-            kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,
+        // https://developer.apple.com/documentation/security/keychain_services/keychain_items/item_attribute_keys_and_values
+        let attributes: NSMutableDictionary = [
+            kSecAttrKeyType: keyConfig.keyType(),
+            kSecAttrKeySizeInBits: keyConfig.keySizeInBits(),
             kSecPrivateKeyAttrs: [
                 kSecAttrIsPermanent: true,
-                kSecAttrApplicationTag: tag,
+                kSecAttrApplicationTag: keyConfig.keyTag(),
                 kSecAttrAccessControl: access
             ]
         ]
         
+        if keyConfig == .ec {
+            attributes[kSecAttrTokenID] = kSecAttrTokenIDSecureEnclave
+        }
+        //if keyConfig == .rsa {
+        //    attributes[kSecAttrKeyClass] = kSecAttrKeyClassPrivate
+        //}
+        
         guard let key = SecKeyCreateRandomKey(attributes, &error) else {
-            print("Key generation error: \(error)")
+            print("Key generation error: \(String(describing: error))")
             throw error!.takeRetainedValue() as Error
         }
         return key
@@ -65,7 +110,9 @@ class ViewController: UIViewController {
     
     // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/protecting_keys_with_the_secure_enclave
     private func testSecureEnclave() {
+        print("KEY TAG: \(String(decoding: keyConfig.keyTag(), as: UTF8.self))")
         var privateKey: SecKey?
+        // Erase all content and settings from emulator to start brand new.
         if let key = try? checkPrivateKeyExistance() {
             privateKey = key
         } else {
@@ -80,10 +127,12 @@ class ViewController: UIViewController {
             print("private key: \(privateKeyExtneralRepresentation)")
         }
         print("PublicKey: \(publicKey)")
-        let jwk = jwkRepresentation(publicKey)
-        let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
-        print("JWT: \(jwkJsonString)")
-        let signAlgorithm: SecKeyAlgorithm = .ecdsaSignatureMessageX962SHA256
+        if keyConfig == .ec {
+            let jwk = jwkRepresentation(publicKey)
+            let jwkJsonString = try! String(data: JSONEncoder().encode(jwk), encoding: .utf8)!
+            print("JWT: \(jwkJsonString)")
+        }
+        let signAlgorithm: SecKeyAlgorithm = keyConfig.keySignAlgorithm()
         guard SecKeyIsAlgorithmSupported(privateKey, .sign, signAlgorithm) else {
             print("Error: unsupported sign algorithm: \(signAlgorithm)")
             return
@@ -118,7 +167,7 @@ class ViewController: UIViewController {
             digest as CFData,
             &error
         ) else {
-            print("Verification error: \(error))")
+            print("Verification error: \(String(describing: error)))")
             return false
         }
         return true
@@ -195,11 +244,14 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         print("SecureEnclave Available = \(SecureEnclave.isAvailable)")
-        testSecureEnclave()
     }
     
     @IBAction func goAction(_ sender: Any) {
         testSecureEnclave()
+    }
+    
+    @IBAction func keyTypeValueChanged(_ sender: Any) {
+        keyConfig = KeyConfig(rawValue: keySelector.selectedSegmentIndex) ?? .ec
     }
 }
 

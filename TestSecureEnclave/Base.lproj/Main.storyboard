@@ -25,14 +25,29 @@
                                     <action selector="goAction:" destination="BYZ-38-t0r" eventType="touchUpInside" id="pZu-dZ-QGv"/>
                                 </connections>
                             </button>
+                            <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="kyo-Ns-sbC">
+                                <rect key="frame" x="150.66666666666666" y="365.66666666666669" width="89" height="32"/>
+                                <segments>
+                                    <segment title="EC"/>
+                                    <segment title="RSA"/>
+                                </segments>
+                                <connections>
+                                    <action selector="keyTypeValueChanged:" destination="BYZ-38-t0r" eventType="valueChanged" id="GtH-oR-C9t"/>
+                                </connections>
+                            </segmentedControl>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstItem="kyo-Ns-sbC" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="SuY-1a-ANR"/>
                             <constraint firstItem="CUd-CO-WhT" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="Wpl-xK-1py"/>
                             <constraint firstItem="CUd-CO-WhT" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="kjq-zK-dGt"/>
+                            <constraint firstItem="CUd-CO-WhT" firstAttribute="top" secondItem="kyo-Ns-sbC" secondAttribute="bottom" constant="8" id="xdo-bN-NRd"/>
                         </constraints>
                     </view>
+                    <connections>
+                        <outlet property="keySelector" destination="kyo-Ns-sbC" id="wsF-A0-cdQ"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
