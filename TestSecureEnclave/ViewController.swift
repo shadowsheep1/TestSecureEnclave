@@ -15,13 +15,17 @@ class ViewController: UIViewController {
     private enum KeyConfig: Int, CaseIterable {
         case ec, rsa
         
-        func keyTag() -> Data {
+        func keyTagString() -> String {
             switch self {
             case .ec:
-                return "com.example.keys.mykey.ec".data(using: .utf8)!
+                return "com.example.keys.mykey.ec"
             case .rsa:
-                return "com.example.keys.mykey.rsa".data(using: .utf8)!
+                return "com.example.keys.mykey.rsa"
             }
+        }
+        
+        func keyTag() -> Data {
+            keyTagString().data(using: .utf8)!
         }
         
         func keyType() -> CFString {
@@ -52,20 +56,33 @@ class ViewController: UIViewController {
             }
         }
     }
-
-    // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/storing_keys_in_the_keychain
-    private func checkPrivateKeyExistance() throws -> SecKey? {
-        let getQuery: [String: Any] = [
+    
+    private func privateKeyKeychainQuery() -> [String : Any] {
+        return [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: keyConfig.keyTag(),
             kSecAttrKeyType as String: keyConfig.keyType(),
             kSecReturnRef as String: true
         ]
+    }
+    
+    private func removeKeyFromKeychain() throws {
+        let status = SecItemDelete(privateKeyKeychainQuery() as CFDictionary)
+        guard status == errSecSuccess else {
+            print("Key error: \(status)")
+            throw NSError(domain: "Error removing private key alias \(keyConfig.keyTagString())", code: 42, userInfo: nil)
+        }
+        print("Cleaned private key alias \(keyConfig.keyTagString())!")
+    }
+    
+    // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/storing_keys_in_the_keychain
+    private func checkPrivateKeyExistance() throws -> SecKey? {
+        let getQuery = privateKeyKeychainQuery()
         var item: CFTypeRef?
         let status = SecItemCopyMatching(getQuery as CFDictionary, &item)
         guard status == errSecSuccess else {
             print("Key error: \(status)")
-            throw NSError(domain: "Error retrieving private key alias \(keyConfig.keyTag())", code: 42, userInfo: nil)
+            throw NSError(domain: "Error retrieving private key alias \(keyConfig.keyTagString())", code: 42, userInfo: nil)
         }
         let key = item as! SecKey
         return key
@@ -110,7 +127,7 @@ class ViewController: UIViewController {
     
     // https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/protecting_keys_with_the_secure_enclave
     private func testSecureEnclave() {
-        print("KEY TAG: \(String(decoding: keyConfig.keyTag(), as: UTF8.self))")
+        print("KEY TAG: \(keyConfig.keyTagString())")
         var privateKey: SecKey?
         // Erase all content and settings from emulator to start brand new.
         if let key = try? checkPrivateKeyExistance() {
@@ -152,7 +169,7 @@ class ViewController: UIViewController {
             print("OK: sample data verified!")
         }
     }
-   
+    
     private func verifySampleData(
         _ message: Data,
         _ digest: Data,
@@ -195,12 +212,12 @@ class ViewController: UIViewController {
     private func printAns1Pem(_ publicKeyData: Data) {
         let ecHeader: [UInt8] = [
             /* sequence          */ 0x30, 0x59,
-            /* |-> sequence      */ 0x30, 0x13,
-            /* |---> ecPublicKey */ 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, // (ANSI X9.62 public key type)
-            /* |---> prime256v1  */ 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, // (ANSI X9.62 named elliptic curve)
-            /* |-> bit headers   */ 0x07, 0x03, 0x42, 0x00
+                                    /* |-> sequence      */ 0x30, 0x13,
+                                    /* |---> ecPublicKey */ 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, // (ANSI X9.62 public key type)
+                                    /* |---> prime256v1  */ 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, // (ANSI X9.62 named elliptic curve)
+                                    /* |-> bit headers   */ 0x07, 0x03, 0x42, 0x00
         ]
-
+        
         var asn1 = Data()
         asn1.append(Data(ecHeader))
         asn1.append(publicKeyData as Data)
@@ -253,6 +270,10 @@ class ViewController: UIViewController {
     @IBAction func keyTypeValueChanged(_ sender: Any) {
         keyConfig = KeyConfig(rawValue: keySelector.selectedSegmentIndex) ?? .ec
     }
+    
+    @IBAction func removeKeyAction(_ sender: Any) {
+        try? removeKeyFromKeychain()
+    }
 }
 
 // https://github.com/vapor/core/blob/main/Sources/Core/Data+Base64URL.swift
@@ -285,7 +306,7 @@ extension String {
 extension Digest {
     var bytes: [UInt8] { Array(makeIterator()) }
     var data: Data { Data(bytes) }
-
+    
     var hexStr: String {
         bytes.map { String(format: "%02X", $0) }.joined()
     }
